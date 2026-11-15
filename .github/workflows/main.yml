@@ -1,1 +1,54 @@
+name: Build webOS IPK
 
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  package-ipk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install LG webOS CLI (@webos-tools/cli)
+        run: npm install -g @webos-tools/cli
+
+      - name: Stage & Package webOS TV .ipk
+        run: |
+          if ls *.zip 1> /dev/null 2>&1; then
+            for f in *.zip; do unzip -o "$f"; done
+          fi
+          if [ -d RtspDreamWebOS ]; then
+            cd RtspDreamWebOS
+          elif [ -d webos-project ]; then
+            cd webos-project
+          fi
+          mkdir -p build/webapp dist dist-homebrew build/homebrew
+          cp appinfo.json index.html styles.css app.js icon.png largeIcon.png build/webapp/
+          ares-package build/webapp service --no-minify -o dist
+          if [ -f homebrew/appinfo.json ]; then
+            cp homebrew/appinfo.json index.html styles.css app.js icon.png largeIcon.png build/homebrew/
+            ares-package build/homebrew service --no-minify -o dist-homebrew
+          fi
+          ls -lh dist dist-homebrew || true
+
+      - name: Upload webOS .ipk Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RtspDreamViewer-webos-ipk
+          path: "**/dist/*.ipk"
+
+      - name: Upload Homebrew Screensaver .ipk Artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RtspDreamViewer-webos-homebrew-ipk
+          path: "**/dist-homebrew/*.ipk"
+          if-no-files-found: ignore
